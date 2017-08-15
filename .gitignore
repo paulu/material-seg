@@ -1,4 +1,4 @@
 *.pyc
 minc-alexnet_full_conv.caffemodel
 minc-googlenet_full_conv.caffemodel
-
+minc-model
