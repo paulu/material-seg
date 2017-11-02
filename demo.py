@@ -17,6 +17,13 @@ from matclass import dataset
 import densecrf_matclass.general_densecrf
 import imageutils
 
+def mkdir_p(dirpath):
+  if not os.path.exists(dirpath):
+    os.makedirs(dirpath)
+
+def mkdir_p_for_file(pathname):
+  mkdir_p(os.path.split(pathname)[0])
+
 def labels_to_color(labels):
     """ Convert netcat labels to a color-mapped image """
     assert (labels <= dataset.UNKNOWN_LABEL).all() and (labels >= 0).all()
@@ -135,7 +142,11 @@ def main(config):
     lcrf=densecrf_matclass.general_densecrf.LearnableDenseCRF(crf_color,crf_map,crf_params)
     labels_crf=lcrf.map(crf_params)
     result=labels_to_color(labels_crf)
-    imageutils.write('{}-result.jpg'.format(os.path.splitext(ipath)[0]),result)
+    opath='{}{}{}'.format(config['output_prefix'],os.path.splitext(ipath)[0],config['output_suffix'])
+    assert not os.path.exists(opath)
+    mkdir_p_for_file(opath)
+    imageutils.write(opath,result)
+    print(opath)
 
 def available_disk_space():
   st=os.statvfs('.')
@@ -145,6 +156,8 @@ if __name__=='__main__':
   # configure by command-line arguments
   parser=argparse.ArgumentParser(description='MINC full-scene material segmentation.',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('input',type=str,nargs='+',help='input color image')
+  parser.add_argument('--output_prefix',type=str,default='results/',help='output pathname prefix')
+  parser.add_argument('--output_suffix',type=str,default='.jpg',help='output pathname suffix')
   parser.add_argument('--arch',type=str,default='A4,G1',choices=['googlenet','vgg16','alexnet'],help='pre-trained model architecture')
   parser.add_argument('--device_id',type=int,default=0,help='zero-indexed CUDA device')
   config=parser.parse_args()
