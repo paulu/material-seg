@@ -5,6 +5,7 @@ import subprocess
 import PIL.Image
 import PIL.ImageDraw
 import PIL.ImageFont
+import six
 
 def read(ipath,dtype=numpy.float32):
   '''
@@ -14,6 +15,14 @@ def read(ipath,dtype=numpy.float32):
   if img.mode!='RGB':
     img=img.convert('RGB')
   return numpy.asarray(img,dtype=dtype)/255.0
+
+def read_shape(ipath,dtype=numpy.float32):
+  '''
+  Returns the shape (height, width, 3) of the image. This is often much
+  faster than reading the image.
+  '''
+  img=PIL.Image.open(ipath)
+  return (img.height, img.width, 3)
 
 def write(opath,I,**kwargs):
   '''
@@ -32,13 +41,31 @@ def write(opath,I,**kwargs):
     # expectation that the default save options are reasonable.
     raise ValueError('Unknown image extension ({})'.format(ext))
 
+def write_bytes(I,ext,**kwargs):
+  '''
+  Given a H x W x 3 RGB image it is clipped to the range [0,1] and
+  returned as a byte buffer. ext is the file extension (.jpg or .png).
+  '''
+  img=PIL.Image.fromarray((I*255).clip(0,255).astype(numpy.uint8))
+  f=six.StringIO()
+  if ext=='.jpg':
+    quality=kwargs['quality'] if 'quality' in kwargs else 95
+    img.save(f,format='JPEG',quality=quality,optimize=True)
+  elif ext=='.png':
+    img.save(f,format='PNG')
+  else:
+    # I do not want to save unknown extensions because there is no
+    # expectation that the default save options are reasonable.
+    raise ValueError('Unknown image extension ({})'.format(ext))
+  return f.getvalue()
+
 def resize(I,shape):
   image=PIL.Image.fromarray((I*255).clip(0,255).astype(numpy.uint8))
   if shape[0]<I.shape[0] and shape[1]<I.shape[1]:
     image=image.resize((shape[1],shape[0]),PIL.Image.BICUBIC)
   else:
     image=image.resize((shape[1],shape[0]),PIL.Image.LANCZOS)
-  return numpy.asarray(image)/255.0
+  return numpy.asarray(image,dtype=I.dtype)/255.0
 
 def scale(I,scale_factor):
   return resize(I,(int(round(I.shape[0]*scale_factor)),int(round(I.shape[1]*scale_factor))))

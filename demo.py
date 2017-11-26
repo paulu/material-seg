@@ -93,6 +93,9 @@ def main(config):
     # these are the CRF parameters for MINC (see supplemental)
     # the parameters can have a big impact on the output
     # so they should be tuned for the target domain
+    # (MINC note: this code is not exactly the same as the
+    # original MINC code so these parameters will not
+    # generate the exact same results)
     crf_params={
       "bilateral_pairwise_weight": 5.0, # w_p
       "bilateral_theta_xy": 0.1, # \theta_p
