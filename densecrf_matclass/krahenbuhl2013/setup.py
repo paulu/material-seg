@@ -9,7 +9,7 @@ except ImportError:
     sys.exit(1)
 
 setup(
-    ext_modules=cythonize(Extension(
+    ext_modules=cythonize([Extension(
         'krahenbuhl2013',
         sources=[
             'krahenbuhl2013.pyx',
@@ -28,5 +28,5 @@ setup(
             "/usr/include/eigen3",
         ],
         language="c++",
-    )),
+    )]),
 )
