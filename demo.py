@@ -14,7 +14,8 @@ import os.path
 import caffe
 import scipy.ndimage.interpolation
 from matclass import dataset
-import densecrf_matclass.general_densecrf
+#import densecrf_matclass.general_densecrf
+import densecrf_matclass.densecrf # this one ignores the "other" category
 import imageutils
 
 def mkdir_p(dirpath):
@@ -63,6 +64,8 @@ def nearest_multiple(x,n):
 def main(config):
   caffe.set_device(config['device_id'])
   caffe.set_mode_gpu()
+
+  # step 1. configure cnn
   if config['arch']=='A4,G1':
     # an ensemble of alexnet and googlenet
     models=[
@@ -82,8 +85,12 @@ def main(config):
     effective_stride=[32,32]
 
     # TODO: A4 needs spatial oversampling (# shifts = 2)
+  else:
+    raise NotImplementedError
 
-    # these are the CRF parameters for MINC
+  # step 2. configure crf
+  if config['crf']=='1':
+    # these are the CRF parameters for MINC (see supplemental)
     # the parameters can have a big impact on the output
     # so they should be tuned for the target domain
     crf_params={
@@ -91,23 +98,19 @@ def main(config):
       "bilateral_theta_xy": 0.1, # \theta_p
       "bilateral_theta_lab_l": 20.0, # \theta_L
       "bilateral_theta_lab_ab": 5.0, # \theta_ab
-      "min_dim": 550, # map size
       "n_crf_iters": 10,
-      "splat_triangle_weight": 1,
       "unary_prob_padding": 1e-05,
-      "ignore_labels": [dataset.NAME_TO_NETCAT['other']],
-      "stride": 32,
     }
   else:
     raise NotImplementedError
 
   pad_value=bgr_mean[::-1]/255.0
 
+  # step 3. extract class prediction maps
   for ipath in config['input']:
     # read image
     original=imageutils.read(ipath)
-    #print(ipath,original.shape)
-    z=crf_params['min_dim']/float(min(original.shape[:2]))
+    z=config['min_dim']/float(min(original.shape[:2]))
     crf_shape=(23,int(round(original.shape[0]*z)),int(round(original.shape[1]*z)))
 
     # predict 6 maps: 3 scales for each model
@@ -129,20 +132,31 @@ def main(config):
 
         # predict and resample the map to be the correct size
         data=preprocess_and_reshape(scaled,model,bgr_mean=bgr_mean)
-        #print(index,index2,'data',data.shape)
         output=model.forward_all(data=data)['prob'][0]
-        #print(index,index2,'output',output.shape)
         output=scipy.ndimage.interpolation.zoom(output,[1.0,crf_shape[1]/float(output.shape[1]),crf_shape[2]/float(output.shape[2])],order=1)
         maps.append(output)
 
-    # average all maps
+    # step 4. average all maps
     crf_map=numpy.asarray(maps).mean(axis=0)
-    #print(index,index2,'crf map',crf_map.shape)
-    crf_color=imageutils.resize(original,crf_shape)
-    lcrf=densecrf_matclass.general_densecrf.LearnableDenseCRF(crf_color,crf_map,crf_params)
+    if False:
+      # output extra maps for debugging
+      for i,x,j in [(i,x,j) for i,x in enumerate(maps) for j in range(23)]: imageutils.write('zzz_map_{}{}.jpg'.format(dataset.NETCAT_TO_NAME[j],i),x[j])
+      for j in range(23): imageutils.write('zzz_mean_map_{}.jpg'.format(dataset.NETCAT_TO_NAME[j],i),crf_map[j])
+      imageutils.write('zzz_naive_labels.png',labels_to_color(numpy.argsort(-crf_map.reshape(23,-1).T).T.reshape(*crf_map.shape)[0]))
+    crf_color=imageutils.resize(original,(crf_shape[1],crf_shape[2]))
+    assert crf_color.shape[0]==crf_map.shape[1] and crf_color.shape[1]==crf_map.shape[2]
+
+    # step 5. dense crf
+    #lcrf=densecrf_matclass.general_densecrf.LearnableDenseCRF(crf_color,crf_map,crf_params)
+    lcrf=densecrf_matclass.densecrf.LearnableDenseCRF(crf_color,crf_map,crf_params)
     labels_crf=lcrf.map(crf_params)
+
+    # step 6. visualize with color labels
     result=labels_to_color(labels_crf)
-    opath='{}{}{}'.format(config['output_prefix'],os.path.splitext(ipath)[0],config['output_suffix'])
+    if os.path.exists(config['output']) and os.path.isdir(config['output']):
+      opath=os.path.join(config['output'],os.path.splitext(os.path.split(ipath)[1])[0])+'.png'
+    else:
+      opath=config['output']
     assert not os.path.exists(opath)
     mkdir_p_for_file(opath)
     imageutils.write(opath,result)
@@ -156,10 +170,11 @@ if __name__=='__main__':
   # configure by command-line arguments
   parser=argparse.ArgumentParser(description='MINC full-scene material segmentation.',formatter_class=argparse.ArgumentDefaultsHelpFormatter)
   parser.add_argument('input',type=str,nargs='+',help='input color image')
-  parser.add_argument('--output_prefix',type=str,default='results/',help='output pathname prefix')
-  parser.add_argument('--output_suffix',type=str,default='.jpg',help='output pathname suffix')
-  parser.add_argument('--arch',type=str,default='A4,G1',choices=['googlenet','vgg16','alexnet'],help='pre-trained model architecture')
+  parser.add_argument('--output',type=str,default='results',help='output location')
+  parser.add_argument('--arch',type=str,default='A4,G1',choices=['A4,G1'],help='class prediction architecture')
+  parser.add_argument('--crf',type=str,default='1',choices=['1'],help='crf parameters')
   parser.add_argument('--device_id',type=int,default=0,help='zero-indexed CUDA device')
+  parser.add_argument('--min_dim',type=int,default=550,help='output size (smallest side)')
   config=parser.parse_args()
   print('config',config.__dict__)
 
@@ -182,6 +197,5 @@ if __name__=='__main__':
     netsurgery.netsurgery('minc-model/deploy-alexnet.prototxt','minc-model/minc-alexnet.caffemodel',['fc6','fc7','fc8-20'],'deploy-alexnet_full_conv.prototxt',['fc6-conv','fc7-conv','fc8-20-conv'],'minc-alexnet_full_conv.caffemodel')
     #227 54 25 11 4
 
-  #main({'input':['images/0013.jpg'], 'arch':'A4,G1', 'device_id':0})
   main(config.__dict__)
 
