@@ -14,16 +14,13 @@ import os.path
 import caffe
 import scipy.ndimage.interpolation
 from matclass import dataset
+if not os.path.exists('densecrf_matclass/krahenbuhl2013/krahenbuhl2013.so'):
+  os.chdir('densecrf_matclass/krahenbuhl2013/')
+  subprocess.check_call(['make'])
+  os.chdir('../..')
 #import densecrf_matclass.general_densecrf
 import densecrf_matclass.densecrf # this one ignores the "other" category
 import imageutils
-
-def mkdir_p(dirpath):
-  if not os.path.exists(dirpath):
-    os.makedirs(dirpath)
-
-def mkdir_p_for_file(pathname):
-  mkdir_p(os.path.split(pathname)[0])
 
 def labels_to_color(labels):
     """ Convert netcat labels to a color-mapped image """
@@ -161,7 +158,6 @@ def main(config):
     else:
       opath=config['output']
     assert not os.path.exists(opath)
-    mkdir_p_for_file(opath)
     imageutils.write(opath,result)
     print(opath)
 
