@@ -1,5 +1,5 @@
-numpy
-scipy
-Pillow
-six
-Cython
+numpy==1.13.1
+scipy==0.17.0
+Pillow==2.9.0
+six==1.10.0
+Cython==0.26.1
