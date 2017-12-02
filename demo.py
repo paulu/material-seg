@@ -101,6 +101,16 @@ def main(config):
       "n_crf_iters": 10,
       "unary_prob_padding": 1e-05,
     }
+  elif config['crf']=='matclass':
+    # new CRF parameters
+    crf_params={
+      "bilateral_pairwise_weight": 8.0, # w_p
+      "bilateral_theta_xy": 0.5, # \theta_p
+      "bilateral_theta_lab_l": 0.5, # \theta_L
+      "bilateral_theta_lab_ab": 3.0, # \theta_ab
+      "n_crf_iters": 10,
+      "unary_prob_padding": 1e-05,
+    }
   else:
     raise NotImplementedError
 
@@ -171,7 +181,7 @@ if __name__=='__main__':
   parser.add_argument('input',type=str,nargs='+',help='input color image')
   parser.add_argument('--output',type=str,default='results',help='output location')
   parser.add_argument('--arch',type=str,default='A4,G1',choices=['A4,G1'],help='class prediction architecture')
-  parser.add_argument('--crf',type=str,default='1',choices=['1'],help='crf parameters')
+  parser.add_argument('--crf',type=str,default='matclass',choices=['1','matclass'],help='crf parameters')
   parser.add_argument('--device_id',type=int,default=0,help='zero-indexed CUDA device')
   parser.add_argument('--min_dim',type=int,default=550,help='output size (smallest side)')
   config=parser.parse_args()
