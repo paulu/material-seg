@@ -1,5 +1,11 @@
 # material-seg
 
+### Introduction
+
+Predicts material segmentations for photographs. See http://opensurfaces.cs.cornell.edu/publications/minc/ for a description of the method.
+
+![alt text](example2.jpg "Examples")
+
 ### Example
 
 ```bash
